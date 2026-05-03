@@ -1,5 +1,4 @@
-FROM python:3.11-slim
-WORKDIR /app
-RUN pip install requests
-COPY soak-monitor.py /app/
-CMD ["python", "/app/soak-monitor.py"]
+FROM alpine:latest
+COPY scripts/monitor.sh /monitor.sh
+RUN chmod +x /monitor.sh
+CMD ["/monitor.sh"]
