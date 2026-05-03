@@ -741,6 +741,24 @@ k6 run --vus 100 --duration 30s tests/scenario.js
 
 ---
 
+## 🛡️ Phase-1 Production Guardrails & Database-Only Target
+
+### Production Guardrails (must enable before external/Prod use)
+
+- **Circuit breaker**: Auto-abort test if error rate > 1% or p99 latency exceeds tier-specific thresholds. Implement in controller as a watchdog that polls worker results every 5s and kills all workers if breached.
+- **Rate ceiling**: Enforce a global maximum RPS (configurable, default 10k) at the controller level; reject/queue test start requests that exceed it. Prevents accidental DDoS.
+- **Allow-list**: Restrict test targets to approved hostnames/IPs (configured via `ALLOWED_TARGETS` env var). Any target outside the list is rejected before worker allocation.
+- **Secrets handling**: Never embed API keys, tokens, or passwords in YAML/UI. Inject via environment variables or mounted secret files (e.g., `KONG_API_KEY`, `DB_PASSWORD`). Rotate regularly.
+
+### Database-Only Target
+
+Added a "Database only (raw query)" target to isolate database performance from the HTTP stack. When selected:
+1. Controller instructs workers to call `/run-db` instead of `/run`.
+2. Workers open direct PostgreSQL connections (psycopg2) and execute the configured query at scale.
+3. Useful for baseline DB capacity, connection-pool sizing, and query-latency analysis without proxy/API overhead.
+
+Use case: run soak tests against the database directly to find max QPS before query-time degradation, then compare against full-stack runs to identify layer-specific bottlenecks.
+
 ## 🔄 CI/CD Integration
 
 `.github/workflows/load-test.yml`

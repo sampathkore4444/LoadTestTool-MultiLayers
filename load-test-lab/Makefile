@@ -28,3 +28,16 @@ chaos:
 soak:
 	@echo "Running 5-min soak test..."
 	curl -X POST http://worker1:5000/run -H "Content-Type: application/json" -d '{"threads":4,"connections":50,"duration":"300s","url":"http://localhost/api/hello","rate":0}'
+
+chaos-run:
+	@echo "Injecting chaos via API..."
+	curl -X POST http://chaos-agent:8080/inject -H "Content-Type: application/json" -d '{"type":"pod-kill","target":"worker1","duration":30}'
+
+soak-run:
+	@echo "Running soak test via controller..."
+	open http://localhost:8501 || echo "Open http://localhost:8501 manually"
+
+dashboard:
+	@echo "Opening dashboards..."
+	open http://localhost:3000 || echo "Open http://localhost:3000 manually"
+	open http://localhost:16686 || echo "Open http://localhost:16686 manually"

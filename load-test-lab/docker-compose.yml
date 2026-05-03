@@ -3,6 +3,8 @@ services:
     image: postgres:15
     environment:
       POSTGRES_PASSWORD: postgres
+      MAX_GLOBAL_RPS: "5000"
+      ALLOWED_TARGETS_REGEX: "localhost|127\\.0\\.0\\.1|backend|database"
     volumes:
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
@@ -60,13 +62,24 @@ services:
     image: prom/prometheus:latest
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml
     ports:
       - "9090:9090"
+
+  prometheus-alertmanager:
+    image: prom/alertmanager:latest
+    volumes:
+      - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    ports:
+      - "9093:9093"
 
   grafana:
     image: grafana/grafana:latest
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - ./grafana/provisioning:/etc/grafana/provisioning
     ports:
       - "3000:3000"
 
@@ -76,10 +89,31 @@ services:
       - "16686:16686"
       - "14268:14268"
 
+  chaos-agent:
+    build: ./chaos
+    privileged: true
+    depends_on:
+      - prometheus
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - chaos-data:/data
+    environment:
+      - CHECK_INTERVAL=30
+
+  soak-monitor:
+    build: ./scripts
+    depends_on:
+      - prometheus
+    environment:
+      - PROMETHEUS_URL=http://prometheus:9090
+      - REGRESSION_THRESHOLD=0.2
+
   worker1:
     build: ./workers
     depends_on:
       - frontend-nginx
+    environment:
+      - CHAOS_AGENT_URL=http://chaos-agent:8080
 
   worker2:
     build: ./workers
@@ -93,3 +127,7 @@ services:
     depends_on:
       - worker1
       - worker2
+      - chaos-agent
+
+volumes:
+  chaos-data:

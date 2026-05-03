@@ -5,6 +5,7 @@ import os
 import threading
 import time
 import psycopg2
+import requests as req
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -25,6 +26,8 @@ def parse_duration(s):
     s = str(s).strip()
     if s.endswith("m"):
         return int(s[:-1]) * 60
+    if s.endswith("h"):
+        return int(s[:-1]) * 3600
     if s.endswith("s"):
         return int(s[:-1])
     return int(s)
@@ -44,6 +47,15 @@ def run():
     if rate and rate > 0:
         cmd.insert(-1, "-R")
         cmd.insert(-1, str(rate))
+    
+    # Check for chaos agent
+    chaos_agent = os.getenv("CHAOS_AGENT_URL", "")
+    if chaos_agent:
+        try:
+            req.get(f"{chaos_agent}/health", timeout=1)
+        except:
+            pass
+    
     result = subprocess.run(cmd, capture_output=True, text=True)
     return jsonify({
         "stdout": result.stdout,
@@ -52,7 +64,7 @@ def run():
         "config": cfg
     })
 
-def db_worker_thread(db_cfg, query, duration_sec):
+def db_worker_thread(db_cfg, query, duration_sec, leak_detector=False):
     conn = psycopg2.connect(**db_cfg)
     cur = conn.cursor()
     end = time.time() + duration_sec
@@ -63,6 +75,12 @@ def db_worker_thread(db_cfg, query, duration_sec):
             cur.execute(query)
             cur.fetchone()
         count += 1
+        # Memory leak detection: monitor process memory
+        if leak_detector and count % 1000 == 0:
+            mem = subprocess.run(["cat", "/proc/self/status"], capture_output=True, text=True)
+            for line in mem.stdout.split("\n"):
+                if line.startswith("VmRSS"):
+                    print(f"Memory: {line}")
     cur.close()
     conn.close()
     return count
@@ -79,9 +97,10 @@ def run_db():
     query = cfg.get("query", "SELECT 1")
     duration = parse_duration(cfg.get("duration", "10s"))
     threads = cfg.get("threads", 4)
+    leak_detector = cfg.get("leak_detector", False)
 
     with ThreadPoolExecutor(max_workers=threads) as ex:
-        futures = [ex.submit(db_worker_thread, db_cfg, query, duration) for _ in range(threads)]
+        futures = [ex.submit(db_worker_thread, db_cfg, query, duration, leak_detector) for _ in range(threads)]
         total = sum(f.result() for f in as_completed(futures))
 
     return jsonify({
@@ -93,7 +112,7 @@ def run_db():
 
 @app.route("/health")
 def health():
-    return jsonify({"status": "ok", "worker": "wrk+db"})
+    return jsonify({"status": "ok", "worker": "wrk+db", "timestamp": time.time()})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, threaded=True)

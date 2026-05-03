@@ -1,0 +1,31 @@
+{
+  "annotations": {
+    "list": [{"datasource": "Prometheus", "enable": true, "expr": "ALERTS", "name": "Alerts"}]
+  },
+  "description": "KiloLoad overview",
+  "panels": [
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"unit": "reqps"}},
+      "title": "RPS (Kong)",
+      "type": "stat",
+      "targets": [{"expr": "rate(kong_http_status_count[1m])", "refId": "A"}]
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"unit": "ms"}},
+      "title": "Backend p99 Latency",
+      "type": "stat",
+      "targets": [{"expr": "histogram_quantile(0.99, rate(backend_api_duration_seconds_bucket[1m])) * 1000", "refId": "A"}]
+    },
+    {
+      "datasource": "Prometheus",
+      "title": "Error Rate",
+      "type": "stat",
+      "targets": [{"expr": "rate(kong_http_status_count{code=~\"5..\"}[1m]) / rate(kong_http_status_count[1m])", "refId": "A"}]
+    }
+  ],
+  "refresh": "5s",
+  "title": "KiloLoad Overview",
+  "uid": "kilotest-overview"
+}

@@ -1,0 +1,27 @@
+groups:
+  - name: kiloload-alerts
+    rules:
+      - alert: HighErrorRate
+        expr: rate(kong_http_status_count{code=~"5.."}[5m]) / rate(kong_http_status_count[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate > 5% for 2 minutes"
+      - alert: LatencyRegression
+        expr: histogram_quantile(0.99, rate(backend_api_duration_seconds_bucket[5m])) > 0.2
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency p99"
+          description: "p99 backend latency > 200ms"
+      - alert: MemoryLeakDetected
+        expr: process_resident_memory_bytes{job="worker"} > 500 * 1024 * 1024
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Worker memory high"
+          description: "Worker RSS > 500MB for 10m"
