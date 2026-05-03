@@ -1,0 +1,95 @@
+services:
+  database:
+    image: postgres:15
+    environment:
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: ./backend
+    depends_on:
+      - database
+    ports:
+      - "5000:5000"
+
+  backend-nginx:
+    image: nginx:alpine
+    volumes:
+      - ./backend-nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+    ports:
+      - "8081:80"
+
+  kong:
+    image: kong:3.4
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_PLUGINS: bundled,prometheus
+    volumes:
+      - ./kong/kong.yml:/kong/kong.yml
+    depends_on:
+      - backend-nginx
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+      - "8002:8002"
+
+  frontend-nginx:
+    image: nginx:alpine
+    volumes:
+      - ./frontend-nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - kong
+    ports:
+      - "80:80"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.92.0
+    volumes:
+      - ./otel/otel-collector.yaml:/etc/otel/config.yaml
+    ports:
+      - "4318:4318"
+      - "9464:9464"
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - "3000:3000"
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+
+  worker1:
+    build: ./workers
+    depends_on:
+      - frontend-nginx
+
+  worker2:
+    build: ./workers
+    depends_on:
+      - frontend-nginx
+
+  controller:
+    build: ./controller
+    ports:
+      - "8501:8501"
+    depends_on:
+      - worker1
+      - worker2

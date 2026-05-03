@@ -1,0 +1,40 @@
+_format_version: "3.0"
+transforms: true
+
+services:
+  - name: backend-service
+    url: http://backend-nginx:80
+    routes:
+      - name: backend-route
+        paths: ["/api"]
+        strip_path: false
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 300
+          hour: 5000
+          policy: local
+      - name: request-size-limiting
+        config:
+          allowed_payload_size: 1048576
+      - name: correlation-id
+        config:
+          header_name: correlation-id
+          generator: uuid
+          echo_downstream: true
+
+  - name: admin-service
+    url: http://backend-nginx:80
+    routes:
+      - name: admin-route
+        paths: ["/admin"]
+        strip_path: false
+    plugins:
+      - name: key-auth
+        config:
+          key_names: ["apikey"]
+
+plugins:
+  - name: prometheus
+    config:
+      per_consumer: true

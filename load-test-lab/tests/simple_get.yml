@@ -1,0 +1,17 @@
+name: Simple GET /api/hello
+endpoint: http://localhost/api/hello
+method: GET
+phases:
+  - duration: 10s
+    target: 100
+  - duration: 30s
+    target: 1000
+  - duration: 10s
+    target: 100
+thresholds:
+  p99_latency_ms: 100
+  error_rate: 0.01
+checks:
+  - type: json
+    path: $.message
+    expected: ok
